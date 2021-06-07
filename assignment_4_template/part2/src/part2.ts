@@ -28,10 +28,10 @@ export function makePromisedStore<K, V>(): PromisedStore<K, V> {
         },
         set(key: K, value: V) {
             return new Promise<void>((resolve)=>{
-                if(promisedStore.has(key)){
+                //if(promisedStore.has(key)){
                     promisedStore.set(key, value);
                     resolve();
-                }
+                //}
             })
         },
         delete(key: K) {
@@ -80,24 +80,32 @@ export function asycMemo<T, R>(f: (param: T) => R): (param: T) => Promise<R> {
 /* 2.3 */
 
  function* filterGenerator<T>(genFn: () => Generator<T>, filterFn: (pred:T) => boolean): Generator<T>{
-    for(let x of genFn().next().value){
-        if(filterFn(x))
-            yield x;   
+    let genf : Generator<T> = genFn();
+    let x : IteratorResult<T,any> = genf.next();
+    while(!x.done)
+    {
+        if(filterFn(x.value))
+            yield x.value;
+        x = genf.next();
     }
 }
 
-export function lazyFilter<T>(genFn: () => Generator<T>, filterFn: (pred:T) => boolean): Generator<T> {
-    return filterGenerator(genFn, filterFn);
+export function lazyFilter<T>(genFn: () => Generator<T>, filterFn: (pred:T) => boolean): () => Generator<T> {
+    return ():Generator<T> => filterGenerator(genFn, filterFn);
 }
 
 function* mapGenerator<T,R> (genFn: () => Generator<T>, mapFn: (param:T) => R): Generator<R> {
-    for(let x of genFn().next().value){
-        yield mapFn(x);
+    let genf : Generator<T> = genFn();
+    let x : IteratorResult<T,any> = genf.next();
+    while(!x.done)
+    {
+        yield mapFn(x.value);
+        x = genf.next();
     }
 }
 
-export function lazyMap<T, R>(genFn: () => Generator<T>, mapFn: (param:T) => R): Generator<R> {
-    return mapGenerator(genFn, mapFn);
+export function lazyMap<T, R>(genFn: () => Generator<T>, mapFn: (param:T) => R): () => Generator<R> {
+    return () : Generator<R> => mapGenerator(genFn, mapFn);
 }
 
 /* 2.4 */
@@ -123,47 +131,86 @@ export function lazyMap<T, R>(genFn: () => Generator<T>, mapFn: (param:T) => R):
 //     })
 // }
 
+// export async function asyncWaterfallWithRetry(fns: [() => Promise<any>, ...((param: any) => any)[]]): Promise<any> {
+//     let index = 0;
+//     let prev: Promise<any>;
+//     let temp: any; 
+//     for(let x of fns){
+//         if(index === 0){//first function
+//             prev = new Promise<any>((resolveOne) => {
+//                  try{
+//                      resolveOne(fns[0]());//if everything is ok
+//                  }
+//                  catch{//first time 
+//                     setTimeout(() => {
+//                         return new Promise<any>((resolveTwo) => {
+//                             try{
+//                                 resolveTwo(fns[0]());
+//                             }
+//                             catch(err){//second time
+//                                 setTimeout(() => {
+//                                     return new Promise<any>((resolveThree, reject) => {
+//                                         try{
+//                                             resolveThree(fns[0]());
+//                                         }
+//                                         catch(err){//third time
+//                                             reject(err)
+//                                         }
+//                                     })
+//                                 }, 2000) //wait for 2 seconds and try again 
+//                             }
+//                         })
+//                     }, 2000) //wait for 2 seconds and try again
+//                  }
+//             })
+//         }
+//         else{//rest of functions
+//             prev = new Promise<any>((resolveOne) => {
+//                 try{
+//                     resolveOne(x(temp));//if everything is ok
+//                 }
+//                 catch{//first time 
+//                    setTimeout(() => {
+//                        return new Promise<any>((resolveTwo) => {
+//                            try{
+//                                resolveTwo(x(temp));
+//                            }
+//                            catch(err){//second time
+//                                setTimeout(() => {
+//                                    return new Promise<any>((resolveThree, reject) => {
+//                                        try{
+//                                            resolveThree(x(temp));
+//                                        }
+//                                        catch(err){//third time
+//                                            reject(err)
+//                                        }
+//                                    })
+//                                }, 2000) //wait for 2 seconds and try again 
+//                            }
+//                        })
+//                    }, 2000) //wait for 2 seconds and try again
+//                 }
+//            })
+//         }
+//         index ++;
+//         temp = prev;    
+//     }
+// }
+let t:number = 2000;
+
+function rejectDelay(reason:any) {
+    return new Promise(function(resolve, reject) {
+        setTimeout(reject.bind(null, reason), t); 
+    });
+}
+
 export async function asyncWaterfallWithRetry(fns: [() => Promise<any>, ...((param: any) => any)[]]): Promise<any> {
-    let index = 0;
-    let prev: Promise<any>;
-    let temp: any; 
-    for(let x of fns){
-        if(index === 0){//first function
-            prev = fns[0]().catch(() => { 
-                return new Promise<any>(((resolveOne) => 
-                    setTimeout(() => {
-                        resolveOne(fns[0]().catch(() => {
-                            return new Promise<any>(((resolveTwo, rejectTwo) => {
-                                setTimeout(() => {
-                                    resolveTwo(fns[0]().catch((err) => {
-                                        rejectTwo(err)
-                                    }))
-                                }, 2000) //set 2 seconds
-                            }))
-                        }))
-                    }, 2000) //set 2 seconds    
-                ))
-            })
-        }
-        else{//rest of functions
-            prev = x(temp).catch(() => {
-                return new Promise<any>(((resolveOne) => {
-                    setTimeout(() => {
-                        resolveOne(x(temp).catch(() => {
-                            return new Promise<any>(((resolveTwo, reject) => {
-                                setTimeout(() => {
-                                    resolveTwo(x(temp).catch((err:any) => {
-                                        reject(err)
-                                    }))
-                                }, 2000) //set 2 seconds
-                            }))
-                        }))
-                    }, 2000)// set 2 seconds
-                    })    
-                )
-            })
-        }
-        index = index +  1;
-        temp = prev;    
+    let p : Promise<any> = fns[0]().catch(error=>fns[0]()).catch(rejectDelay).catch(error=>fns[0]()).catch(rejectDelay).then(result=>fns[1](result)).catch(error=>{return error;});
+    for(let i = 2 ; i < fns.length ; i++ )
+    {
+        p = p.catch(result=>fns[i-1](result)).catch(rejectDelay);
+        p = p.catch(result=>fns[i-1](result)).catch(rejectDelay);
+        p = p.then(result => fns[i](result)).catch(error=>{return error;});
     }
+    return p;
 }
