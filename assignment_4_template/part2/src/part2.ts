@@ -108,109 +108,30 @@ export function lazyMap<T, R>(genFn: () => Generator<T>, mapFn: (param:T) => R):
     return () : Generator<R> => mapGenerator(genFn, mapFn);
 }
 
-/* 2.4 */
-// you can use 'any' in this question
-
-// const helper = (func: () => Promise<any>): Promise<any> => {
-//     return new Promise<any>((resolve, reject) => {
-//         setTimeout(() => {
-//             resolve(func().catch((err) => {
-//                 reject(err);
-//             }))
-//         },2000)//second time
-//     })
-// }
-
-// const helper1 = (func: (v:any) => Promise<any>, v: any): Promise<any> =>{
-//     return new Promise<any>((resolve, reject) => {
-//         setTimeout(() => {
-//             resolve(func(v).catch((err) => {
-//                 reject(err);
-//             }))
-//         },2000)//second time
-//     })
-// }
-
-// export async function asyncWaterfallWithRetry(fns: [() => Promise<any>, ...((param: any) => any)[]]): Promise<any> {
-//     let index = 0;
-//     let prev: Promise<any>;
-//     let temp: any; 
-//     for(let x of fns){
-//         if(index === 0){//first function
-//             prev = new Promise<any>((resolveOne) => {
-//                  try{
-//                      resolveOne(fns[0]());//if everything is ok
-//                  }
-//                  catch{//first time 
-//                     setTimeout(() => {
-//                         return new Promise<any>((resolveTwo) => {
-//                             try{
-//                                 resolveTwo(fns[0]());
-//                             }
-//                             catch(err){//second time
-//                                 setTimeout(() => {
-//                                     return new Promise<any>((resolveThree, reject) => {
-//                                         try{
-//                                             resolveThree(fns[0]());
-//                                         }
-//                                         catch(err){//third time
-//                                             reject(err)
-//                                         }
-//                                     })
-//                                 }, 2000) //wait for 2 seconds and try again 
-//                             }
-//                         })
-//                     }, 2000) //wait for 2 seconds and try again
-//                  }
-//             })
-//         }
-//         else{//rest of functions
-//             prev = new Promise<any>((resolveOne) => {
-//                 try{
-//                     resolveOne(x(temp));//if everything is ok
-//                 }
-//                 catch{//first time 
-//                    setTimeout(() => {
-//                        return new Promise<any>((resolveTwo) => {
-//                            try{
-//                                resolveTwo(x(temp));
-//                            }
-//                            catch(err){//second time
-//                                setTimeout(() => {
-//                                    return new Promise<any>((resolveThree, reject) => {
-//                                        try{
-//                                            resolveThree(x(temp));
-//                                        }
-//                                        catch(err){//third time
-//                                            reject(err)
-//                                        }
-//                                    })
-//                                }, 2000) //wait for 2 seconds and try again 
-//                            }
-//                        })
-//                    }, 2000) //wait for 2 seconds and try again
-//                 }
-//            })
-//         }
-//         index ++;
-//         temp = prev;    
-//     }
-// }
-let t:number = 2000;
-
-function rejectDelay(reason:any) {
-    return new Promise(function(resolve, reject) {
-        setTimeout(reject.bind(null, reason), t); 
-    });
-}
+function sleep(ms:number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
 export async function asyncWaterfallWithRetry(fns: [() => Promise<any>, ...((param: any) => any)[]]): Promise<any> {
-    let p : Promise<any> = fns[0]().catch(error=>fns[0]()).catch(rejectDelay).catch(error=>fns[0]()).catch(rejectDelay).then(result=>fns[1](result)).catch(error=>{return error;});
-    for(let i = 2 ; i < fns.length ; i++ )
-    {
-        p = p.catch(result=>fns[i-1](result)).catch(rejectDelay);
-        p = p.catch(result=>fns[i-1](result)).catch(rejectDelay);
-        p = p.then(result => fns[i](result)).catch(error=>{return error;});
+    let result:any;
+
+    for (let i = 0 ; i < fns.length; i++)
+    {     
+        try {
+            result = await fns[i](result);
+        } catch (error) {
+            try {
+                sleep(2000);
+                result = await fns[i](result);
+            } catch (error) {
+                try {
+                    sleep(2000);
+                    result = await fns[i](result);
+                } catch (error) {
+                    throw error;
+                }
+            }
+         }
     }
-    return p;
+    return result;
 }
