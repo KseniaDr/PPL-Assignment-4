@@ -335,8 +335,12 @@ const parseClassExp = (params: Sexp[]): Result<ClassExp> =>
     (params.length != 4) || (params[0] != ':') ? makeFailure(`class must have shape (class [: <type>]? <fields> <methods>) - got ${params.length} params instead`) :
     parseGoodClassExp(params[1], params[2], params[3]);
 
-const parseGoodClassExp = (typeName: Sexp, varDecls: Sexp, bindings: Sexp): Result<ClassExp> =>
-    makeFailure("TODO parseGoodClassExp");
+//3.3
+const parseGoodClassExp = (typeName: Sexp, varDecls: Sexp, bindings: Sexp): Result<ClassExp> =>/////////////////////////////////////TODO//////////////////////////// 
+      (!isArray(varDecls) || !isGoodBindings(bindings)) ? makeFailure("varDecls not an array or bad bidings"):
+      (!isString(typeName)) ? makeFailure("type name is not a of type string"):
+      bind(parseBindings(bindings), (func) => bind(mapResult(parseVarDecl, varDecls), (variables) => makeOk(makeClassExp(makeTVar(typeName), variables, func))));  
+
 
 // sexps has the shape (quote <sexp>)
 export const parseLitExp = (param: Sexp): Result<LitExp> =>
@@ -448,9 +452,21 @@ const unparseClassExp = (ce: ClassExp, unparseWithTVars?: boolean): Result<strin
 // L51: Collect named types in AST
 // Collect class expressions in parsed AST so that they can be passed to the type inference module
 
-export const parsedToClassExps = (p: Parsed): ClassExp[] => 
-    // TODO parsedToClassExps
+//3.3.2
+export const parsedToClassExps = (p: Parsed): ClassExp[] => ////////////////////////////////////////////////////////////////TODO////////////////////////////////////////////
+    isIfExp(p) ? parsedToClassExps(p.test).concat(parsedToClassExps(p.then)).concat(parsedToClassExps(p.alt)) :
+    isProcExp(p) ? map(parsedToClassExps, p.body).reduce((acc, cur)=>acc.concat(cur), []) :
+    isLetExp(p) ? map(parsedToClassExps, map((param) => param.val, p.bindings)).concat(map(parsedToClassExps, p.body)).reduce((acc, cur) => acc.concat(cur), []) :
+    isLetrecExp(p) ? map(parsedToClassExps, map((param) => param.val, p.bindings)).concat(map(parsedToClassExps, p.body)).reduce((acc, cur) => acc.concat(cur), []) :
+    isAppExp(p) ? parsedToClassExps(p.rator).concat(map(parsedToClassExps, p.rands).reduce((acc, cur) => acc.concat(cur), [])) :
+    isSetExp(p) ? parsedToClassExps(p.val) :  
+    isDefineExp(p) ? parsedToClassExps(p.val) :
+    isClassExp(p) ? [p] : // L51  
+    isProgram(p) ? map(parsedToClassExps, p.exps).reduce((acc, cur) => acc.concat(cur), []) :
     [];
+
+
+
 
 // L51 
 export const classExpToClassTExp = (ce: ClassExp): ClassTExp => 
